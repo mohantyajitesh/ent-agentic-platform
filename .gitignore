@@ -4,3 +4,4 @@ node_modules/
 .next/
 *.log
 GithubDeployment_userDetailsAWSQA.txt
+GithubDeployment_userDetailsAWSDEV.txt

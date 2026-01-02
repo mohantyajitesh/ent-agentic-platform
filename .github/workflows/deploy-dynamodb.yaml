@@ -1,14 +1,20 @@
+name: Deploy DynamoDB
+
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'infrastructure/dynamodb/**'
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     
     steps:
       - name: Checkout code

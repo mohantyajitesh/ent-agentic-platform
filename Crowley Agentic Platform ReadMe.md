@@ -101,9 +101,20 @@ Steps to migrate DynamoDB table to new account
 1. Go to IAC Generator, and generate cloudformation template for the dynamoDB table in the current account. This exports only the structure of the table without data. Download the YAML file and place in your local folder
 2. Also login to AWS account from Powershell or terminal simultaneously and run the below command to export contents in JSON format.
    ```bash
-   aws dynamodb scan --table-name cmc-harbor-ai-agent-registry --output json > registry-data.json
+   # Export scan output
+    aws dynamodb scan --table-name cmc-harbor-ai-agent-registry --profile crowley-corp-qa --output json > scan-output.json
+
+# Transform to batch-write format (PowerShell script)
+    $scan = Get-Content scan-output.json | ConvertFrom-Json
+    $batchFormat = @{
+        "cmc-harbor-ai-agent-registry" = $scan.Items | ForEach-Object {
+            @{ "PutRequest" = @{ "Item" = $_ } }
+            }
+        }
+$batchFormat | ConvertTo-Json -Depth 10 | Out-File -Encoding utf8 registry-data.json
    ```
-3. Save the table data in the same folder
+3. Save the table data in the same folder. Open in notedpad ++ and change encoding to UTF-8
+    To validate the data in the json file, you can run -> Get-Content infrastructure/dynamodb/registry-data.json
 4. As a next step now lets create the github repo and start pushing the infrastructure code.
     in powershell, cd C:\Users\mohanaj\git\ent-agentic-platform
     git init
@@ -139,7 +150,24 @@ ent-agentic-platform/
 
     - aws configure sso #Enter all values and configure a profile for target environment if logging in for the first time
     - aws sts get-caller-identity #Confirm that you are in target environment
-    - aws iam create-user --user-name github-actions-deployer --profile crowley-corp-qa #Create a new user in AWS target environment and keep note of this username for future permissions
+
+    Create a json file called github-deployer-policy and save it in repo root folder in local. Paste below - 
+    {
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:*",
+        "dynamodb:*",
+        "iam:PassRole"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+
+    - aws iam create-user --user-name github-actions-deployer  #Create a new user in AWS target environment and keep note of this username for future permissions. YOu can create it in multiple environments if doing this for the first time. Following this we can setup multiple environments in Github Repo to enable manual environment based trigger from Github to each environment.
     - aws iam put-user-policy `
           --user-name github-actions-deployer `
           --policy-name DeploymentPolicy `
