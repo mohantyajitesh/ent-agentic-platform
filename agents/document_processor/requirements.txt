@@ -1,0 +1,24 @@
+# Core Agent Framework
+strands-agents
+strands-agents-tools
+bedrock-agentcore
+
+# Document Processing - The Power Libraries
+unstructured[all-docs]          # Handles: PDF, DOCX, XLSX, PPTX, EML, MSG, HTML, images, TXT, CSV, XML, RTF, ODT, EPUB
+docling                          # IBM's doc parser - excellent table extraction, layout understanding
+
+# AWS Services
+boto3                            # AWS SDK
+amazon-textract-caller           # Simplified Textract API for forms/tables
+amazon-textract-response-parser  # Parse Textract responses into usable structures
+
+# OCR Fallback (if needed locally)
+pytesseract                      # OCR wrapper
+pdf2image                        # Convert PDF pages to images for OCR/vision
+
+# Utilities
+python-dotenv                    # Environment variables
+pydantic>=2.0                    # Schema validation for structured outputs
+
+# UI (optional)
+streamlit                        # Simple web UI

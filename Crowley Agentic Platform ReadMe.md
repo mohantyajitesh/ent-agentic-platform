@@ -179,9 +179,9 @@ ent-agentic-platform/
     As next steps,
 
         Go to your repo: https://github.com/YOUR_USERNAME/ent-agentic-platform
-        Settings → Secrets and variables → Actions
-        Click "New repository secret"
-        Add these two secrets and region one by one:
+        Settings → Environments → New Environment
+        Create 2 environments - qa and dev
+        Add these two secrets and region one by one per environment:
 
             AWS_ACCESS_KEY_ID: <value>
             AWS_SECRET_ACCESS_KEY: <value>
@@ -197,17 +197,23 @@ ent-agentic-platform/
 
         name: Deploy DynamoDB
 
+name: Deploy DynamoDB
+
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'infrastructure/dynamodb/**'
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
     
     steps:
       - name: Checkout code
@@ -231,3 +237,21 @@ jobs:
         run: |
           aws dynamodb batch-write-item \
             --request-items file://infrastructure/dynamodb/registry-data.json
+
+
+    7. Next type Git Status in powershell to see current branch and status of pending files. Make sure to put files you don't want to synch in .gitignore
+        git add .
+        git commit -m "Update workflow to manual dispath with dev/qa environments"
+        git push
+
+        Go to Actions tab in the repo
+        Select Deploy DynamoDB
+        Click Run workflow
+        Select dev from dropdown
+        Click "Run Workflow" button
+
+**=======================================================This concludes DynamoDB deployment via CICD==============================================================**
+
+**========================================================Document Processor Agent Migration=======================================================================**
+
+
