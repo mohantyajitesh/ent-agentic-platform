@@ -1,0 +1,52 @@
+openapi: "3.0.1"
+info:
+  title: "docProcessorAgent"
+  description: "API endpoint that invokes the document processor agent"
+  version: "2025-12-16T15:51:51Z"
+servers:
+- url: "https://2cez10kwrc.execute-api.us-east-1.amazonaws.com/{basePath}"
+  variables:
+    basePath:
+      default: "stage"
+paths:
+  /docProcessor:
+    post:
+      responses:
+        "200":
+          description: "200 response"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empty"
+      security:
+      - api_key: []
+    options:
+      responses:
+        "200":
+          description: "200 response"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: "string"
+            Access-Control-Allow-Methods:
+              schema:
+                type: "string"
+            Access-Control-Allow-Headers:
+              schema:
+                type: "string"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empty"
+components:
+  schemas:
+    Empty:
+      title: "Empty Schema"
+      type: "object"
+  securitySchemes:
+    api_key:
+      type: "apiKey"
+      name: "x-api-key"
+      in: "header"
+x-amazon-apigateway-security-policy: "SecurityPolicy_TLS13_1_3_2025_09"
+x-amazon-apigateway-endpoint-access-mode: "BASIC"
