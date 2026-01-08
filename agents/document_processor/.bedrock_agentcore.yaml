@@ -10,7 +10,7 @@ agents:
     source_path: C:\Users\mohanaj\git\ent-agentic-platform\agents\document_processor
     aws:
       execution_role: arn:aws:iam::843074507558:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-8349e2633a
-      execution_role_auto_create: false
+      execution_role_auto_create: true
       account: '843074507558'
       region: us-east-1
       ecr_repository: 843074507558.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-document_processor
@@ -28,21 +28,21 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: document_processor-zmJ8bz636b
-      agent_arn: arn:aws:bedrock-agentcore:us-east-1:843074507558:runtime/document_processor-zmJ8bz636b
-      agent_session_id: 73376dec-58a9-4b8d-97e4-8825a10406a2
+      agent_id: document_processor-8H5bBZ8qBU
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:843074507558:runtime/document_processor-8H5bBZ8qBU
+      agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-document_processor-builder
       execution_role: arn:aws:iam::843074507558:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-8349e2633a
       source_bucket: bedrock-agentcore-codebuild-sources-843074507558-us-east-1
     memory:
-      mode: STM_AND_LTM
-      memory_id: document_processor_mem-dlH9yzCkW7
-      memory_arn: null
-      memory_name: document_processor_memory
+      mode: STM_ONLY
+      memory_id: document_processor_mem-C2y8M7BwiW
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:843074507558:memory/document_processor_mem-C2y8M7BwiW
+      memory_name: document_processor_mem
       event_expiry_days: 30
-      first_invoke_memory_check_done: false
-      was_created_by_toolkit: false
+      first_invoke_memory_check_done: true
+      was_created_by_toolkit: true
     identity:
       credential_providers: []
       workload: null

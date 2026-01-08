@@ -9,8 +9,8 @@ ENV UV_SYSTEM_PYTHON=1 \
     DOCKER_CONTAINER=1 \
     AWS_REGION=us-east-1 \
     AWS_DEFAULT_REGION=us-east-1 \
-    BEDROCK_AGENTCORE_MEMORY_ID=document_processor_mem-dlH9yzCkW7 \
-    BEDROCK_AGENTCORE_MEMORY_NAME=document_processor_memory
+    BEDROCK_AGENTCORE_MEMORY_ID=document_processor_mem-175uIz3bul \
+    BEDROCK_AGENTCORE_MEMORY_NAME=document_processor_mem
 
 
 

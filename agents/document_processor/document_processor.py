@@ -10,6 +10,7 @@ Deployment: AWS Bedrock AgentCore Runtime
 """
  
 import os
+import uuid
 import json
 import base64
 import time
@@ -20,8 +21,19 @@ from datetime import datetime
  
 import boto3
 from botocore.exceptions import ClientError
-#from dotenv import load_dotenv
 from strands import Agent, tool
+
+# Memory imports (wrapped in try/except for graceful fallback)
+try:
+    from bedrock_agentcore.memory.integrations.strands.config import (
+        AgentCoreMemoryConfig, RetrievalConfig
+    )
+    from bedrock_agentcore.memory.integrations.strands.session_manager import (
+        AgentCoreMemorySessionManager
+    )
+    MEMORY_IMPORTS_AVAILABLE = True
+except ImportError:
+    MEMORY_IMPORTS_AVAILABLE = False
 
 # Conditional AgentCore import so CLI works standalone during local testing
 try:
@@ -34,13 +46,8 @@ except ImportError:
 
 # Setup boto3 default session from environment BEFORE importing strands
 # This ensures Strands SDK inherits the correct credentials
-_profile = os.environ.get("AWS_PROFILE")
-_region = os.environ.get("AWS_REGION", "us-east-1")
 
-if _profile:
-    boto3.setup_default_session(profile_name=_profile, region_name=_region)
-else:
-    boto3.setup_default_session(region_name=_region)
+
  
 # =============================================================================
 # CONFIGURATION
@@ -50,14 +57,15 @@ TEXTRACT_TIMEOUT_MINUTES = int(os.environ.get("TEXTRACT_TIMEOUT_MINUTES", "10"))
 SIGNATURE_CONFIDENCE_THRESHOLD = float(os.environ.get("SIGNATURE_CONFIDENCE_THRESHOLD", "0.85"))
 MAX_VISION_FILE_SIZE_MB = int(os.environ.get("MAX_VISION_FILE_SIZE_MB", "20"))
 CLAUDE_MAX_TOKENS = int(os.environ.get("CLAUDE_MAX_TOKENS", "4096"))
-
+REGION = os.environ.get("AWS_REGION", "us-east-1")
 CLAUDE_MODEL_ID = os.environ.get("CLAUDE_MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0")
 ANTHROPIC_VERSION = os.environ.get("ANTHROPIC_VERSION", "bedrock-2023-05-31")
 IMAGE_MEDIA_TYPE = os.environ.get("IMAGE_MEDIA_TYPE", "image/jpeg")
 DOC_TEXT_LIMIT = int(os.environ.get("DOC_TEXT_LIMIT", "50000"))
 EXTRACTION_PROMPT_LIMIT = int(os.environ.get("EXTRACTION_PROMPT_LIMIT", "500"))
 VISION_MAX_TOKENS = int(os.environ.get("VISION_MAX_TOKENS", "8192"))
-
+#MEMORY_ID = os.environ.get("BEDROCK_AGENTCORE_MEMORY_ID")
+MEMORY_ID="document_processor_mem-C2y8M7BwiW"
 
 # =============================================================================
 # USAGE TRACKING
@@ -664,66 +672,94 @@ SIGNATURE CONFIDENCE:
 - < 50%: Invalid
 
 Always report when human review is required."""
- 
-agent = Agent(
-    system_prompt=SYSTEM_PROMPT,
-    tools=[
-        textract_async,
-        load_document,
-        extract_structured_data
-    ]
-)
- 
+
+# ============================================
+# Agent Factory (with Memory Support)
+# ============================================
+def create_agent(session_id: str , actor_id: str ) -> Agent:
+    """Create Document Processor Agent with optional memory."""
+    session_manager = None
+    
+    # Configure memory if available
+    if MEMORY_ID and MEMORY_IMPORTS_AVAILABLE:
+        session_manager = AgentCoreMemorySessionManager(
+            agentcore_memory_config=AgentCoreMemoryConfig(
+                memory_id=MEMORY_ID,
+                session_id=session_id,
+                actor_id=actor_id or "doc-processor"
+            ),
+            region_name=REGION
+        )
+        print(f"[DocProcessor] Memory ENABLED - Session: {session_id}")
+    else:
+        print(f"[DocProcessor] Memory DISABLED - Stateless mode")
+    
+    return Agent(
+        system_prompt=SYSTEM_PROMPT,
+        tools=[
+            textract_async,
+            load_document,
+            extract_structured_data
+        ],
+        session_manager=session_manager
+    )
+
+
  
 # =============================================================================
 # ENTRYPOINTS
 # =============================================================================
 
-# AgentCore Runtime (only if available)
-if AGENTCORE_AVAILABLE:
-    app = BedrockAgentCoreApp()
- 
-    @app.entrypoint
-    async def invoke(payload):
-        """AgentCore entrypoint with usage tracking."""
-        reset_usage()
-        
-        try:
-            user_message = payload.get("prompt", "Hello")
-            response = agent(user_message)
-            
-            return json.dumps({
-                "response": str(response),
-                "usage": get_usage()
-            })
-            
-        except Exception as e:
-            return json.dumps({
-                "error": str(e),
-                "usage": get_usage()
-            })
- 
- 
-# CLI for local testing
-def process(prompt: str) -> str:
-    """Process a document extraction request with usage tracking."""
+app = BedrockAgentCoreApp()
+
+@app.entrypoint
+def invoke(payload: dict) -> dict:
+    """AgentCore entrypoint with usage tracking and session support."""
     reset_usage()
-    response = agent(prompt)
+    print(f"Entry Point")
+        
+    prompt = payload.get("prompt", "Hello")
+    print(f"prompt obtained: {prompt}")
+    session_id = payload.get("session_id","session-100")
+    print(f"session_id obtained: {session_id}")
+    actor_id = payload.get("actor_id", "doc-processor")
+    # Pad session_id to 33 chars (AgentCore requirement)
+    if len(session_id) < 33:
+        session_id = session_id + "-" + "0" * (33 - len(session_id) - 1)
+    
+    # Create agent with session for memory support
+    doc_agent = create_agent(session_id, actor_id)
+    print(f"Created.. agentcore agent for session: {session_id}, actor: {actor_id}")
+    response = doc_agent(f"{prompt}\n\n[session_id: {session_id}]")
     
     return json.dumps({
         "response": str(response),
-        "usage": get_usage()
-    }, indent=2)
+        "session_id": session_id,
+         "actor_id": actor_id,
+         "memory_enabled": MEMORY_ID is not None,
+         "usage": get_usage(),
+         "status": "success"
+    })
  
  
+# Simple CLI processing (for local testing)
 if __name__ == "__main__":
     import sys
     
     if len(sys.argv) > 1:
+        # CLI mode - process argument directly
         prompt = " ".join(sys.argv[1:])
-        print(process(prompt))
-    elif AGENTCORE_AVAILABLE:
-        app.run()
+        session_id = input("Enter session_id :")
+        print(f"[CLI] Testing with prompt: {prompt}")
+        
+        # Generate unique session ID for CLI
+        #session_id = f"cli-{uuid.uuid4().hex[:24]}"
+        print(f"[CLI] Generated session_id: {session_id}")
+        
+        result = invoke({"prompt": prompt, "session_id": session_id})
+        print(f"[CLI] Response: {result}")
+        print(f"[CLI] MEMORY IMPORTS STATUS: {MEMORY_IMPORTS_AVAILABLE}")
     else:
-        prompt = input("Enter your request: ")
-        print(process(prompt))
+        # Server mode
+        app.run()
+
