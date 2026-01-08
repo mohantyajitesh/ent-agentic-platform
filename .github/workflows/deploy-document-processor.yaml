@@ -1,0 +1,32 @@
+# Deploy Document Processor Agent to Bedrock AgentCore
+# Uses the reusable workflow template: _deploy-agentcore-agent.yaml
+
+name: Deploy Document Processor
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_deploy-agentcore-agent.yaml
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      agent_name: document_processor
+      agent_path: ./agents/document_processor
+      dockerfile_path: ./agents/document_processor/.bedrock_agentcore/document_processor/Dockerfile
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REPOSITORY: ${{ secrets.DOCUMENT_PROCESSOR_ECR_REPOSITORY }}
+      AGENT_RUNTIME_ID: ${{ secrets.DOCUMENT_PROCESSOR_AGENT_ID }}
+      BEDROCK_AGENTCORE_MEMORY_ID: ${{ secrets.DOCUMENT_PROCESSOR_MEMORY_ID }}

@@ -1,7 +1,41 @@
+# Environment files
 .env
 .env.local
+.env.*
+!.env.example
+
+# Node.js
 node_modules/
 .next/
+
+# Logs
 *.log
+
+# AWS deployment credentials (environment-specific)
 GithubDeployment_userDetailsAWSQA.txt
 GithubDeployment_userDetailsAWSDEV.txt
+
+# Bedrock AgentCore CLI generated config (contains account IDs and ARNs)
+# Each developer/environment generates their own via: bedrock-agentcore init
+.bedrock_agentcore.yaml
+.bedrock_agentcore/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Build artifacts
+dist/
+build/
+*.zip

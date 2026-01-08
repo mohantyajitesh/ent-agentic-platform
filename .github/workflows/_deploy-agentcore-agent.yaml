@@ -1,0 +1,146 @@
+# Reusable workflow for deploying Bedrock AgentCore agents
+# Called by component-specific workflows (e.g., deploy-document-processor.yaml)
+
+name: Deploy AgentCore Agent (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment (dev, qa, prod)'
+        required: true
+        type: string
+      agent_name:
+        description: 'Agent name (e.g., document_processor)'
+        required: true
+        type: string
+      agent_path:
+        description: 'Path to agent directory relative to repo root'
+        required: true
+        type: string
+      dockerfile_path:
+        description: 'Path to Dockerfile relative to repo root'
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
+        required: true
+      ECR_REPOSITORY:
+        required: true
+      AGENT_RUNTIME_ID:
+        required: true
+      BEDROCK_AGENTCORE_MEMORY_ID:
+        required: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get AWS Account ID via STS
+        id: account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+          echo "Deploying to Account: $ACCOUNT_ID"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Agent: ${{ inputs.agent_name }}"
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tags
+        id: tags
+        run: |
+          ECR_URI="${{ steps.account.outputs.account_id }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}"
+          echo "ecr_uri=$ECR_URI" >> $GITHUB_OUTPUT
+          echo "sha_tag=$ECR_URI:${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "latest_tag=$ECR_URI:latest" >> $GITHUB_OUTPUT
+          echo "env_tag=$ECR_URI:${{ inputs.environment }}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.agent_path }}
+          file: ${{ inputs.dockerfile_path }}
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.sha_tag }}
+            ${{ steps.tags.outputs.latest_tag }}
+            ${{ steps.tags.outputs.env_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Bedrock AgentCore
+        run: |
+          echo "Updating AgentCore runtime with new image..."
+          echo "Agent Runtime ID: ${{ secrets.AGENT_RUNTIME_ID }}"
+          echo "Image: ${{ steps.tags.outputs.sha_tag }}"
+
+          # Update the agent runtime with the new container image
+          aws bedrock-agentcore update-agent-runtime \
+            --agent-runtime-id "${{ secrets.AGENT_RUNTIME_ID }}" \
+            --container-config "imageUri=${{ steps.tags.outputs.sha_tag }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+          echo "Deployment initiated successfully!"
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for agent runtime to be ready..."
+
+          # Poll for status (max 5 minutes)
+          for i in {1..30}; do
+            STATUS=$(aws bedrock-agentcore get-agent-runtime \
+              --agent-runtime-id "${{ secrets.AGENT_RUNTIME_ID }}" \
+              --region "${{ secrets.AWS_REGION }}" \
+              --query 'agentRuntime.status' \
+              --output text 2>/dev/null || echo "UNKNOWN")
+
+            echo "Attempt $i/30 - Status: $STATUS"
+
+            if [ "$STATUS" = "ACTIVE" ] || [ "$STATUS" = "READY" ]; then
+              echo "Agent runtime is ready!"
+              exit 0
+            elif [ "$STATUS" = "FAILED" ]; then
+              echo "Deployment failed!"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timeout waiting for agent runtime. Last status: $STATUS"
+          exit 1
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "========================================"
+          echo "Deployment Summary"
+          echo "========================================"
+          echo "Agent: ${{ inputs.agent_name }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Account ID: ${{ steps.account.outputs.account_id }}"
+          echo "Image: ${{ steps.tags.outputs.sha_tag }}"
+          echo "Agent Runtime ID: ${{ secrets.AGENT_RUNTIME_ID }}"
+          echo "========================================"
